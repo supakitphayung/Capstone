@@ -1,0 +1,4 @@
+.venv/
+.ocr_cache/
+ocr_output/
+__pycache__/
