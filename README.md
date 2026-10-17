@@ -52,6 +52,12 @@ Each run saves a separate folder under `ocr_output/` containing:
 - `run.json`: batch status and links to each image's artifacts.
 - `run.log`: processing messages and errors.
 
+Each image JSON and its `run.json` entry include `response_time_seconds` for
+the OCR prediction and `elapsed_seconds` for image loading, OCR, and saving the
+framed image (before writing its JSON). Failed images have a null response time
+and retain their elapsed processing time. The top-level `run.json`
+`response_time_seconds` measures the whole batch, including model startup.
+
 Green boxes have confidence of at least 0.8; orange boxes have lower confidence.
 Box IDs match the JSON `regions` entries. Coordinates use the original image,
 with the origin at the upper left. `bbox` is `[left, top, right, bottom]`.

@@ -189,7 +189,9 @@ def scan_image(path, relative, engine, args, run_dir, cv2, np):
     scan_height = max(1, round(roi_height * args.scale))
     scan = cv2.resize(cropped, (scan_width, scan_height),
                       interpolation=cv2.INTER_CUBIC if args.scale > 1 else cv2.INTER_AREA)
+    response_started = time.perf_counter()
     results = engine.predict(scan)
+    response_time_seconds = round(time.perf_counter() - response_started, 3)
     if len(results) != 1:
         raise RuntimeError(f"Expected one image result, received {len(results)}")
     result = results[0]
@@ -239,15 +241,19 @@ def scan_image(path, relative, engine, args, run_dir, cv2, np):
         "text_rendering": {"font": str(args.font), "font_size": args.font_size,
                            "layout": "text_labels_on_original_image"},
         "elapsed_seconds": round(time.perf_counter() - started, 3),
+        "response_time_seconds": response_time_seconds,
         "timestamp_utc": datetime.now(timezone.utc).isoformat(),
     }
     write_json(json_path, record)
     return {"filename": str(relative), "status": record["status"],
             "region_count": len(regions), "json": str(json_relative),
+            "response_time_seconds": response_time_seconds,
+            "elapsed_seconds": record["elapsed_seconds"],
             "framed_image": str(framed_relative)}
 
 
 def main():
+    run_started = time.perf_counter()
     args = parse_args()
     args.input = args.input.expanduser().resolve()
     args.output = args.output.expanduser().resolve()
@@ -291,13 +297,16 @@ def main():
         for index, path in enumerate(images, 1):
             relative = path.relative_to(source_root)
             LOGGER.info("[%d/%d] Scanning %s", index, len(images), relative)
+            image_started = time.perf_counter()
             try:
                 item = scan_image(path, relative, engine, args, run_dir, cv2, np)
                 LOGGER.info("Saved %d text regions", item["region_count"])
             except Exception as error:
                 LOGGER.exception("Failed to scan %s", relative)
                 item = {"filename": str(relative), "source": str(path),
-                        "status": "error", "error": str(error)}
+                        "status": "error", "error": str(error),
+                        "response_time_seconds": None,
+                        "elapsed_seconds": round(time.perf_counter() - image_started, 3)}
                 error_path = run_dir / "json" / relative.parent / (relative.name + ".json")
                 error_path.parent.mkdir(parents=True, exist_ok=True)
                 write_json(error_path, item)
@@ -310,6 +319,7 @@ def main():
     except Exception as error:
         LOGGER.exception("OCR could not start")
         summary.update(status="error", error=str(error))
+    summary["response_time_seconds"] = round(time.perf_counter() - run_started, 3)
     write_json(summary_path, summary)
     LOGGER.info("Results: %s", run_dir)
     return 0 if summary["status"] == "completed" else 1
