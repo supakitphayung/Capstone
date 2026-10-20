@@ -1,4 +1,7 @@
 .venv/
 .ocr_cache/
 ocr_output/
+evaluation_output/
+experiment_output/
 __pycache__/
+.DS_Store

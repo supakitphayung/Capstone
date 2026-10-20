@@ -1,0 +1,232 @@
+{
+  "pos1": {
+    "text": "1,000",
+    "bbox": [
+      0.0,
+      184.0,
+      224.0,
+      289.0
+    ],
+    "ignore": false
+  },
+  "pos2": {
+    "text": "R3",
+    "bbox": [
+      1589.0,
+      200.0,
+      1668.0,
+      261.0
+    ],
+    "ignore": false
+  },
+  "pos3": {
+    "text": "0.45% w/v",
+    "bbox": [
+      275.0,
+      287.0,
+      705.0,
+      370.0
+    ],
+    "ignore": false
+  },
+  "pos4": {
+    "text": "1,000 ml",
+    "bbox": [
+      1113.0,
+      356.0,
+      1731.0,
+      541.0
+    ],
+    "ignore": false
+  },
+  "pos5": {
+    "text": "SINGLE DOSE CONTAINER",
+    "bbox": [
+      271.0,
+      401.0,
+      1057.0,
+      467.0
+    ],
+    "ignore": false
+  },
+  "pos7": {
+    "text": "STERILE, NONPYROGENIC",
+    "bbox": [
+      268.0,
+      490.0,
+      1052.0,
+      560.0
+    ],
+    "ignore": false
+  },
+  "pos8": {
+    "text": "900",
+    "bbox": [
+      0.0,
+      507.0,
+      153.0,
+      600.0
+    ],
+    "ignore": false
+  },
+  "pos9": {
+    "text": "0.45% SODIUM CHLORIDE INJECTION B.P.",
+    "bbox": [
+      337.0,
+      697.0,
+      1709.0,
+      774.0
+    ],
+    "ignore": false
+  },
+  "pos10": {
+    "text": "800",
+    "bbox": [
+      0.0,
+      933.0,
+      155.0,
+      1026.0
+    ],
+    "ignore": false
+  },
+  "pos11": {
+    "text": "(1/2 Normal Saline Solution)",
+    "bbox": [
+      563.0,
+      1235.0,
+      1471.0,
+      1334.0
+    ],
+    "ignore": false
+  },
+  "pos12": {
+    "text": "700",
+    "bbox": [
+      0.0,
+      1335.0,
+      155.0,
+      1428.0
+    ],
+    "ignore": false
+  },
+  "pos13": {
+    "text": "Each 100 ml contains :",
+    "bbox": [
+      365.0,
+      1467.0,
+      1100.0,
+      1550.0
+    ],
+    "ignore": false
+  },
+  "pos14": {
+    "text": "0.45 g",
+    "bbox": [
+      1431.0,
+      1544.0,
+      1650.0,
+      1642.0
+    ],
+    "ignore": false
+  },
+  "pos15": {
+    "text": "Sodium Chloride",
+    "bbox": [
+      361.0,
+      1548.0,
+      902.0,
+      1630.0
+    ],
+    "ignore": false
+  },
+  "pos16": {
+    "text": "Water for injection",
+    "bbox": [
+      360.0,
+      1629.0,
+      972.0,
+      1719.0
+    ],
+    "ignore": false
+  },
+  "pos17": {
+    "text": "_q.s. to 100 ml",
+    "bbox": [
+      1204.0,
+      1630.0,
+      1648.0,
+      1721.0
+    ],
+    "ignore": false
+  },
+  "pos18": {
+    "text": "Sodium",
+    "bbox": [
+      359.0,
+      1713.0,
+      632.0,
+      1798.0
+    ],
+    "ignore": false
+  },
+  "pos19": {
+    "text": "77 mM/I",
+    "bbox": [
+      1371.0,
+      1715.0,
+      1645.0,
+      1794.0
+    ],
+    "ignore": false
+  },
+  "pos20": {
+    "text": "600",
+    "bbox": [
+      0.0,
+      1765.0,
+      154.0,
+      1855.0
+    ],
+    "ignore": false
+  },
+  "pos21": {
+    "text": "Chloride",
+    "bbox": [
+      363.0,
+      1797.0,
+      652.0,
+      1878.0
+    ],
+    "ignore": false
+  },
+  "pos22": {
+    "text": "77 mM/I",
+    "bbox": [
+      1379.0,
+      1798.0,
+      1644.0,
+      1874.0
+    ],
+    "ignore": false
+  },
+  "pos23": {
+    "text": "Total mOsm/l = 154",
+    "bbox": [
+      363.0,
+      1881.0,
+      986.0,
+      1956.0
+    ],
+    "ignore": false
+  },
+  "pos24": {
+    "text": "1/2 N-S-S",
+    "bbox": [
+      282.47572815533977,
+      824.9575242718446,
+      1733.3737864077668,
+      1280.770631067961
+    ],
+    "ignore": false
+  }
+}
