@@ -1,0 +1,13 @@
+{
+  "samples": [
+    {"id": "1", "file": "1.png", "group": "0.45NSSBP1000", "split": "tune"},
+    {"id": "2", "file": "2.png", "group": "0.45NSSBP1000", "split": "tune"},
+    {"id": "3", "file": "3.png", "group": "D50WUSP500", "split": "tune"},
+    {"id": "4", "file": "4.png", "group": "D50WUSP500", "split": "tune"},
+    {"id": "5", "file": "5.png", "group": "Dextran40USP500", "split": "holdout"},
+    {"id": "6", "file": "6.png", "group": "Dextran40USP500", "split": "holdout"},
+    {"id": "7", "file": "7.png", "group": "LRUSP250", "split": "holdout"},
+    {"id": "8", "file": "8.png", "group": "LRUSP800", "split": "tune"},
+    {"id": "9", "file": "9.png", "group": "LRUSP800", "split": "tune"}
+  ]
+}

@@ -14,10 +14,27 @@ from helpers.ocr_common import (BASELINE, ROOT, print_config, read_json,
 from helpers.ocr_metrics import ranking_key
 
 SWEEP = {
-    "text_det_limit_side_len": [1280, 1920],
+    "text_det_limit_side_len": [1280, 3200],
     "text_det_thresh": [0.2, 0.4],
     "text_det_box_thresh": [0.3, 0.5],
-    "text_det_unclip_ratio": [2.0, 2.5],
+    "text_det_unclip_ratio": [1.0, 1.2],
+}
+
+# Test smaller recognition crops for nearby lines and extra padding for Thai
+# diacritics separately, together with their detector thresholds and resolution.
+FOCUSED_TRIALS = {
+    "tight-thai-lines": {
+        "text_det_limit_side_len": 3200, "text_det_thresh": 0.4,
+        "text_det_box_thresh": 0.5, "text_det_unclip_ratio": 1.0,
+    },
+    "thai-diacritics": {
+        "text_det_limit_side_len": 3200, "text_det_thresh": 0.2,
+        "text_det_box_thresh": 0.5, "text_det_unclip_ratio": 1.8,
+    },
+    "large-touching-text": {
+        "text_det_limit_side_len": 1280, "text_det_thresh": 0.4,
+        "text_det_box_thresh": 0.3, "text_det_unclip_ratio": 1.0,
+    },
 }
 
 
@@ -26,6 +43,8 @@ def automatic_trials():
     for key, values in SWEEP.items():
         for value in values:
             trials.append({"name": f"{key}-{value}", "config": validate_config({key: value})})
+    for name, parameters in FOCUSED_TRIALS.items():
+        trials.append({"name": name, "config": validate_config(parameters)})
     return trials
 
 
@@ -177,7 +196,7 @@ def main():
     parser.add_argument("--input", type=Path, default=ROOT / "images")
     parser.add_argument("--gt", type=Path, default=ROOT / "GroundTruth")
     parser.add_argument("--split-file", type=Path, default=ROOT / "experiments/dataset_split.json")
-    parser.add_argument("--experiments", type=Path, help="JSON with one or more named parameter sets; otherwise use the 9-trial sweep")
+    parser.add_argument("--experiments", type=Path, help="JSON with named parameter sets; otherwise use automatic single-parameter and focused trials")
     parser.add_argument("--output", type=Path, default=ROOT / "experiment_output")
     parser.add_argument("--timeout", type=float, default=1800, help="Seconds per isolated trial")
     parser.add_argument("--tune-only", action="store_true", help="Do not run holdout or require its GT yet")

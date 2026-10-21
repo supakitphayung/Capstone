@@ -8,6 +8,7 @@ import math
 import os
 import re
 import time
+import unicodedata
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -25,6 +26,7 @@ BASELINE = {
     "text_det_limit_side_len": 2560, "text_det_limit_type": "max",
     "text_det_thresh": 0.3, "text_det_box_thresh": 0.6,
     "text_det_unclip_ratio": 1.5, "text_rec_score_thresh": 0.0, "scale": 1.0,
+    "min_text_length": 2,
 }
 PARAMETER_HELP = {
     "text_det_limit_side_len": "เพดานด้านยาวของ detector: เพิ่มเพื่อเก็บรายละเอียด แต่ใช้เวลาและ RAM เพิ่ม",
@@ -34,6 +36,7 @@ PARAMETER_HELP = {
     "text_det_unclip_ratio": "ขยายกรอบก่อนอ่าน: เพิ่มเพื่อครอบวรรณยุกต์ แต่เสี่ยงติดบรรทัดข้างเคียง",
     "text_rec_score_thresh": "กรองคะแนนหลังอ่าน ไม่ได้เพิ่มความสามารถในการอ่าน",
     "scale": "ย่อ/ขยายภาพก่อน pipeline; ยังขึ้นกับเพดาน detector และใช้ RAM เพิ่มเมื่อขยาย",
+    "min_text_length": "จำนวนอักขระที่ไม่ใช่ช่องว่างขั้นต่ำหลังอ่าน (Unicode NFC); 2 ตัดข้อความเดี่ยว และไม่รับข้อความที่มีแต่ combining marks",
 }
 FIXED = set(BASELINE) - set(PARAMETER_HELP)
 GREEN = (0, 170, 0)
@@ -86,6 +89,8 @@ def validate_config(overrides=None):
             raise ValueError(f"{key} must be finite and positive")
     if type(config["text_det_limit_side_len"]) is not int:
         raise ValueError("text_det_limit_side_len must be an integer")
+    if type(config["min_text_length"]) is not int or config["min_text_length"] < 1:
+        raise ValueError("min_text_length must be a positive integer")
     if config["text_det_limit_type"] not in ("min", "max"):
         raise ValueError("text_det_limit_type must be min or max")
     return config
@@ -113,6 +118,7 @@ def add_ocr_arguments(parser):
     parser.add_argument("--det-box-thresh", type=float, dest="text_det_box_thresh")
     parser.add_argument("--det-unclip-ratio", type=float, dest="text_det_unclip_ratio")
     parser.add_argument("--rec-score-thresh", type=float, dest="text_rec_score_thresh")
+    parser.add_argument("--min-text-length", type=int, help="Minimum non-whitespace Unicode characters after recognition (default: 2)")
     parser.add_argument("--cpu-threads", type=int, choices=[4], default=4)
     parser.add_argument("--font", type=Path)
     parser.add_argument("--font-size", type=int)
@@ -137,7 +143,7 @@ def build_engine(config):
     os.environ.setdefault("PADDLE_PDX_MODEL_SOURCE", "BOS")
     started = time.perf_counter()
     from paddleocr import PaddleOCR
-    kwargs = {key: value for key, value in config.items() if key != "scale"}
+    kwargs = {key: value for key, value in config.items() if key not in ("scale", "min_text_length")}
     # Reuse an existing read-only cache without writing outside this project.
     for kind in ("detection", "recognition"):
         name = config[f"text_{kind}_model_name"]
@@ -221,13 +227,20 @@ def predict_regions(engine, image, config, roi=None, min_confidence=None):
         score = float(score)
         if not math.isfinite(score) or score < threshold:
             continue
+        text = str(text)
+        characters = [char for char in unicodedata.normalize("NFC", text) if not char.isspace()]
+        # A detached Thai vowel/tone mark is not a separate text region. Keep
+        # marks attached to a base character, without altering the OCR text.
+        if (len(characters) < config["min_text_length"]
+                or all(unicodedata.category(char).startswith("M") for char in characters)):
+            continue
         points = np.asarray(polygon, dtype=np.float64).copy()
         points[:, 0] = np.clip(points[:, 0] * crop_w / scan_w + x, 0, width)
         points[:, 1] = np.clip(points[:, 1] * crop_h / scan_h + y, 0, height)
         bbox = [float(points[:, 0].min()), float(points[:, 1].min()),
                 float(points[:, 0].max()), float(points[:, 1].max())]
-        regions.append({"text": str(text), "confidence": score, "polygon": points.tolist(),
-                        "bbox": bbox, "languages": languages_in(str(text))})
+        regions.append({"text": text, "confidence": score, "polygon": points.tolist(),
+                        "bbox": bbox, "languages": languages_in(text)})
     regions.sort(key=lambda region: (region["bbox"][1], region["bbox"][0]))
     for index, region in enumerate(regions, 1):
         region["id"] = index
