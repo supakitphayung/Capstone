@@ -5,3 +5,5 @@ evaluation_output/
 experiment_output/
 __pycache__/
 .DS_Store
+GroundTruth/
+GroundTruthDraft/
