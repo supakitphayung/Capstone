@@ -1,3 +1,16 @@
+# ใช้งานผ่านเว็บ React + FastAPI
+
+มีหน้าเว็บสำหรับรันทั้ง 4 script พร้อมฟอร์มค่า baseline/preset, logs, ภาพผลลัพธ์, ตารางคะแนน และคู่มือ flow ภาษาไทย
+ปุ่ม GT Editor เปิด GUI เดิมบนเครื่องที่รัน backend โดยไม่ได้แก้ไข Python script ของ OCR
+
+ติดตั้ง backend และ build frontend ตาม [คู่มือ OCR Workbench](web/README.md) แล้วรันจาก project root:
+
+```sh
+.venv/bin/python -m uvicorn web.backend.app.main:app --host 127.0.0.1 --port 8000 --workers 1
+```
+
+เปิด **http://127.0.0.1:8000** ใช้งานบนเครื่องเดียวกัน ไม่ต้องมีบัญชีหรือ cloud hosting
+
 # Flow การรันสั้นๆ
 ```sh
 python create_gt.py # สร้าง GroundTruthDraft

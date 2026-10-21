@@ -7,3 +7,7 @@ __pycache__/
 .DS_Store
 GroundTruth/
 GroundTruthDraft/
+.webui/
+web/frontend/node_modules/
+web/frontend/dist/
+web/frontend/coverage/
