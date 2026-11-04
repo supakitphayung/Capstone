@@ -12,9 +12,10 @@ from unittest.mock import patch
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PIL import Image
-from PySide6.QtCore import QPointF, Qt
-from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication, QToolButton
+from PyQt5.QtCore import QEvent, QPointF, Qt
+from PyQt5.QtGui import QMouseEvent
+from PyQt5.QtTest import QTest
+from PyQt5.QtWidgets import QApplication, QToolButton
 
 import evaluate_ocr
 from gt_editor import Editor
@@ -51,6 +52,14 @@ class GTWorkflowTests(unittest.TestCase):
         action = self.editor.actions[name]
         return next(button for button in self.editor.findChildren(QToolButton) if button.defaultAction() == action)
 
+    def drag_to(self, point):
+        # Qt5's QTest.mouseMove uses the platform cursor, which offscreen cannot
+        # reliably move. Deliver the held-button event through the viewport.
+        event = QMouseEvent(QEvent.MouseMove, QPointF(point), Qt.NoButton,
+                            Qt.LeftButton, Qt.NoModifier)
+        self.app.sendEvent(self.editor.view.viewport(), event)
+        self.app.processEvents()
+
     def draw_box(self, start=(220, 170), end=(330, 230)):
         before = set(self.editor.doc.data)
         QTest.mouseClick(self.toolbar_button("เพิ่มกรอบ"), Qt.MouseButton.LeftButton)
@@ -61,7 +70,7 @@ class GTWorkflowTests(unittest.TestCase):
         self.assertTrue(view.viewport().rect().contains(first))
         self.assertTrue(view.viewport().rect().contains(last))
         QTest.mousePress(view.viewport(), Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, first)
-        QTest.mouseMove(view.viewport(), last, 10)
+        self.drag_to(last)
         self.assertIsNotNone(view.preview)
         QTest.mouseRelease(view.viewport(), Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, last)
         self.app.processEvents()
@@ -133,7 +142,7 @@ class GTWorkflowTests(unittest.TestCase):
         view.refresh()
         start, end = view.mapFromScene(QPointF(110, 95)), view.mapFromScene(QPointF(135, 110))
         QTest.mousePress(view.viewport(), Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, start)
-        QTest.mouseMove(view.viewport(), end, 10)
+        self.drag_to(end)
         QTest.mouseRelease(view.viewport(), Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, end)
         moved = self.editor.doc.data["pos1"]["bbox"][:]
         for got, expected in zip(moved, [65, 95, 205, 125]):
@@ -141,7 +150,7 @@ class GTWorkflowTests(unittest.TestCase):
         right, bottom = moved[2:]
         start, end = view.mapFromScene(QPointF(right, bottom)), view.mapFromScene(QPointF(right+15, bottom+20))
         QTest.mousePress(view.viewport(), Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, start)
-        QTest.mouseMove(view.viewport(), end, 10)
+        self.drag_to(end)
         QTest.mouseRelease(view.viewport(), Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, end)
         resized = self.editor.doc.data["pos1"]["bbox"]
         self.assertAlmostEqual(resized[2], right+15, delta=1)
@@ -154,7 +163,7 @@ class GTWorkflowTests(unittest.TestCase):
         view = self.editor.view
         start, end = view.mapFromScene(QPointF(220, 170)), view.mapFromScene(QPointF(330, 230))
         QTest.mousePress(view.viewport(), Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, start)
-        QTest.mouseMove(view.viewport(), end, 10)
+        self.drag_to(end)
         self.assertIsNotNone(view.preview)
         self.editor.image_picker.setCurrentIndex(1)
         QTest.mouseRelease(view.viewport(), Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, end)

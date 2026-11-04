@@ -17,7 +17,7 @@ router = APIRouter(prefix="/api")
 @router.get("/health")
 async def health(request: Request):
     settings = request.app.state.settings
-    code = "import importlib.util,json;print(json.dumps({n:bool(importlib.util.find_spec(n)) for n in ('paddleocr','PySide6','cv2')}))"
+    code = "import importlib.util,json;print(json.dumps({n:bool(importlib.util.find_spec(n)) for n in ('paddleocr','PyQt5','cv2')}))"
     try:
         def inspect():
             return subprocess.run([settings.python, "-c", code], capture_output=True, text=True, timeout=5)

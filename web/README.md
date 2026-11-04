@@ -42,7 +42,11 @@ npm run dev
 
 ## หน้าต่าง GT Editor
 
-ปุ่มเปิด GT Editor เรียก Python จาก `.venv/bin/python` เป็นอีก process และแสดง GUI PySide6 ตามปกติบน desktop ของเครื่อง backend ให้รัน backend จาก desktop session ของผู้ใช้เครื่องนี้ ไม่ใช่ headless SSH
+ปุ่มเปิด GT Editor เรียก Python จาก `.venv/bin/python` เป็นอีก process และแสดง GUI PyQt5 ตามปกติบน desktop ของเครื่อง backend ให้รัน backend จาก desktop session ของผู้ใช้เครื่องนี้ ไม่ใช่ headless SSH
+
+บน Jetson/Ubuntu ARM64 ให้ติดตั้ง `python3-pyqt5` และสร้าง venv ด้วย Python ของระบบพร้อม `--system-site-packages` ตาม [README หลัก](../README.md#gt-editor-บน-nvidia-jetson-orin-nx--ubuntu-arm64)
+ถ้าใช้ `.venv-jetson` ให้ตั้ง `OCR_PYTHON="$PWD/.venv-jetson/bin/python"` ตอนเริ่ม backend
+interpreter นี้ใช้กับทุก script จึงต้องติดตั้ง dependencies ของ OCR เพิ่มด้วยหากต้องการรัน OCR ผ่านเว็บ
 
 GUI ใช้โฟลเดอร์ภาพ draft และ saved GT ตามฟอร์ม เมื่อแก้ไขแล้วกดบันทึกจาก GUI และปิดด้วยปุ่มปิดหน้าต่าง เพื่อใช้ขั้นตอนถามบันทึกเดิม เว็บจะไม่บังคับหยุด GUI จากปุ่มยกเลิกงาน OCR
 

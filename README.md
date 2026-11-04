@@ -46,7 +46,6 @@ Capstone/
 ├── gt_editor.py          # GUI แก้ไขและบันทึก GT
 ├── evaluate_ocr.py       # รัน OCR เทียบกับ GT
 ├── experiment_ocr.py     # ทดลองพารามิเตอร์หลายชุด
-├── ocr_labels.py         # สแกน OCR ทั่วไป
 ├── helpers/
 │   ├── __init__.py       # กำหนดให้ helpers เป็น Python package
 │   ├── ocr_common.py     # ค่าตั้งโมเดล อ่าน/เขียนข้อมูล และวาดภาพ
@@ -74,13 +73,35 @@ python3.12 -m venv .venv
 .venv/bin/python ocr_labels.py --input images/1.png
 ```
 
-PaddleOCR/PaddlePaddle ใช้เวอร์ชันที่ตรึงใน `requirements.txt` GUI ใช้ PySide6
+PaddleOCR/PaddlePaddle ใช้เวอร์ชันที่ตรึงใน `requirements.txt` GUI ใช้ PyQt5
 weights และแคชใหม่เก็บใน `.ocr_cache/` และอ่าน weights ที่มีอยู่ใน `~/.paddlex/official_models/` ได้
 ต้องมีอินเทอร์เน็ตในการติดตั้งและดาวน์โหลดครั้งแรก โดยเฉพาะ `PP-OCRv5_mobile_det`
 เมื่อมี weights ครบแล้วใช้แคชรันออฟไลน์ได้ ไม่สลับไปใช้ detector รุ่นอื่นเมื่อดาวน์โหลดไม่สำเร็จ
 
 ฟอนต์ไทยเลือกอัตโนมัติ: Thonburi บน Mac, Tahoma บน Windows, Noto Sans Thai/Garuda บน Linux
 หรือใช้ `--font /path/to/NotoSansThai-Regular.ttf` และ `--font-size 24`
+
+### GT Editor บน NVIDIA Jetson Orin NX / Ubuntu ARM64
+
+ติดตั้ง PyQt5 จากแพ็กเกจ Ubuntu ซึ่งมี build สำหรับ ARM64
+([python3-pyqt5](https://packages.ubuntu.com/jammy/arm64/python3-pyqt5))
+และใช้ Python ของระบบให้ตรงกับแพ็กเกจ `apt`:
+
+```sh
+sudo apt update
+sudo apt install python3-pyqt5 python3-venv fonts-thai-tlwg
+/usr/bin/python3 -m venv --system-site-packages .venv-jetson
+.venv-jetson/bin/python -m pip install 'Pillow>=10,<13'
+.venv-jetson/bin/python -c "from PyQt5.QtWidgets import QApplication; print('PyQt5 OK')"
+.venv-jetson/bin/python gt_editor.py
+```
+
+ชุดคำสั่งนี้เปิด editor ได้โดยไม่ต้องติดตั้ง PaddleOCR และไม่เปลี่ยน environment OCR เดิม
+`--system-site-packages` ทำให้ venv มองเห็น PyQt5 ที่ติดตั้งผ่าน `apt`
+หากใช้ Python คนละรุ่นกับ `/usr/bin/python3` จะใช้ PyQt5 จาก `apt` ร่วมกันไม่ได้
+`requirements.txt` ข้ามการติดตั้ง PyQt5 ผ่าน pip บน Linux ARM64 ให้ใช้ `apt` ตามด้านบน
+ส่วน PaddlePaddle/PaddleOCR สำหรับรัน OCR ต้องติดตั้งรุ่นที่เข้ากับ JetPack/Python ของเครื่องแยกต่างหาก
+เปิด GUI จาก Ubuntu desktop session ที่มีจอแสดงผล
 
 ## สร้างร่างและตรวจแก้
 
