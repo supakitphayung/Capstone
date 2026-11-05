@@ -152,7 +152,7 @@ class WorkbenchTests(unittest.TestCase):
         self.wait(item["id"])
 
     def test_invalid_config_missing_gt_duplicate_names_and_unknown_scripts(self):
-        for payload in ({"script": "unknown"}, {"script": "create_gt", "config": {"device": "gpu:0"}},
+        for payload in ({"script": "unknown"}, {"script": "create_gt", "config": {"cpu_threads": 8}},
                         {"script": "create_gt", "config": {"text_det_thresh": 2}},
                         {"script": "experiment_ocr", "experiment_mode": "custom", "experiments": [
                             {"name": "same", "parameters": {}}, {"name": "same", "parameters": {}}]}):

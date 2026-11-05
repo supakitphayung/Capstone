@@ -11,3 +11,12 @@ GroundTruthDraft/
 web/frontend/node_modules/
 web/frontend/dist/
 web/frontend/coverage/
+# Local virtual environments (e.g. .venv-jetson, .venv312, venv)
+.venv*/
+venv/
+# Editor swap files
+*.swp
+*.swo
+# Local secrets, if ever added
+.env
+.env.*

@@ -8,7 +8,7 @@ import shutil
 import sys
 import time
 from datetime import datetime
-from importlib.metadata import version
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
 from helpers.ocr_common import (ROOT, add_ocr_arguments, annotation_paths, build_engine,
@@ -67,6 +67,16 @@ def verify_sample(root, sample):
             raise ValueError(f"Frozen {name} changed for {sample['relative']}; start a new comparison")
 
 
+def installed_version(name):
+    # The GPU build of paddlepaddle is distributed as "paddlepaddle-gpu".
+    try:
+        return version(name)
+    except PackageNotFoundError:
+        if name != "paddlepaddle":
+            raise
+        return version("paddlepaddle-gpu") + " (gpu)"
+
+
 def run_evaluation(manifest_path, split, config, output, font=None, font_size=None):
     started = time.perf_counter()
     manifest_path, output = Path(manifest_path).resolve(), Path(output).resolve()
@@ -86,7 +96,7 @@ def run_evaluation(manifest_path, split, config, output, font=None, font_size=No
         font = find_thai_font(font)
         for sample in samples:
             verify_sample(manifest_path.parent, sample)
-        report["versions"] = {name: version(name) for name in ("paddleocr", "paddlepaddle", "opencv-contrib-python")}
+        report["versions"] = {name: installed_version(name) for name in ("paddleocr", "paddlepaddle", "opencv-contrib-python")}
         engine, report["model_load_seconds"] = build_engine(config)
         for sample in samples:
             image_started = time.perf_counter()

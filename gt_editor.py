@@ -15,13 +15,23 @@ try:
                                   QLabel, QLineEdit, QListWidget, QMainWindow, QMessageBox,
                                   QSplitter, QVBoxLayout, QWidget)
 except ImportError:
-    if __name__ == "__main__":
-        print("PyQt5 is required. On Ubuntu/Jetson: sudo apt install python3-pyqt5 "
-              "python3-venv; use /usr/bin/python3 -m venv --system-site-packages .venv-jetson. "
-              "See README.md for setup. On macOS/Windows: python -m pip install 'PyQt5>=5.15,<6'.",
-              file=sys.stderr)
-        sys.exit(2)
-    raise
+    try:
+        # Fallback for Python versions without a PyQt5 build (e.g. Python 3.12 on Jetson ARM64).
+        from PySide6.QtCore import QPointF, QRectF, Qt, Signal
+        from PySide6.QtGui import QAction, QColor, QKeySequence, QPainter, QPen, QPixmap
+        from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDoubleSpinBox,
+                                       QFormLayout, QGraphicsScene, QGraphicsView,
+                                       QLabel, QLineEdit, QListWidget, QMainWindow, QMessageBox,
+                                       QSplitter, QVBoxLayout, QWidget)
+    except ImportError:
+        if __name__ == "__main__":
+            print("PyQt5 or PySide6 is required. On Ubuntu/Jetson with system Python: sudo apt install "
+                  "python3-pyqt5 python3-venv; use /usr/bin/python3 -m venv --system-site-packages "
+                  ".venv-jetson. With Python 3.12: python -m pip install PySide6-Essentials. "
+                  "See README.md for setup. On macOS/Windows: python -m pip install 'PyQt5>=5.15,<6'.",
+                  file=sys.stderr)
+            sys.exit(2)
+        raise
 
 
 class ImageView(QGraphicsView):
@@ -112,7 +122,8 @@ class ImageView(QGraphicsView):
         event.accept()
 
     def bounded_point(self, event):
-        point = self.mapToScene(event.pos())
+        pos = event.position().toPoint() if hasattr(event, "position") else event.pos()
+        point = self.mapToScene(pos)
         return QPointF(max(0, min(point.x(), self.doc.width)), max(0, min(point.y(), self.doc.height)))
 
     def mousePressEvent(self, event):

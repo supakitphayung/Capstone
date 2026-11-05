@@ -7,6 +7,7 @@ import json
 import math
 import os
 import re
+import sys
 import time
 import unicodedata
 from datetime import datetime, timezone
@@ -38,7 +39,10 @@ PARAMETER_HELP = {
     "scale": "ย่อ/ขยายภาพก่อน pipeline; ยังขึ้นกับเพดาน detector และใช้ RAM เพิ่มเมื่อขยาย",
     "min_text_length": "จำนวนอักขระที่ไม่ใช่ช่องว่างขั้นต่ำหลังอ่าน (Unicode NFC); 2 ตัดข้อความเดี่ยว และไม่รับข้อความที่มีแต่ combining marks",
 }
-FIXED = set(BASELINE) - set(PARAMETER_HELP)
+DEVICE_HELP = "อุปกรณ์ประมวลผล: cpu หรือ gpu:N; เวลาที่วัดบน GPU เทียบกับ CPU ไม่ได้"
+# device is selectable per run and recorded in each report; GPU timings (and occasionally
+# individual recognitions) differ from CPU, so compare runs on the same device.
+FIXED = set(BASELINE) - set(PARAMETER_HELP) - {"device"}
 GREEN = (0, 170, 0)
 RED = (255, 0, 0)
 GRAY = (100, 100, 100)
@@ -91,6 +95,8 @@ def validate_config(overrides=None):
         raise ValueError("text_det_limit_side_len must be an integer")
     if type(config["min_text_length"]) is not int or config["min_text_length"] < 1:
         raise ValueError("min_text_length must be a positive integer")
+    if type(config["device"]) is not str or not re.fullmatch(r"cpu|gpu(:\d+)?", config["device"]):
+        raise ValueError("device must be cpu, gpu, or gpu:N")
     if config["text_det_limit_type"] not in ("min", "max"):
         raise ValueError("text_det_limit_type must be min or max")
     return config
@@ -99,7 +105,7 @@ def validate_config(overrides=None):
 def describe_config(config):
     return {key: {"value": value, "baseline": BASELINE[key],
                   "changed": value != BASELINE[key],
-                  "description": PARAMETER_HELP.get(key, "ค่าคงที่ในการทดลอง")}
+                  "description": DEVICE_HELP if key == "device" else PARAMETER_HELP.get(key, "ค่าคงที่ในการทดลอง")}
             for key, value in validate_config(config).items()}
 
 
@@ -120,13 +126,14 @@ def add_ocr_arguments(parser):
     parser.add_argument("--rec-score-thresh", type=float, dest="text_rec_score_thresh")
     parser.add_argument("--min-text-length", type=int, help="Minimum non-whitespace Unicode characters after recognition (default: 2)")
     parser.add_argument("--cpu-threads", type=int, choices=[4], default=4)
+    parser.add_argument("--device", help="cpu (default), gpu, or gpu:N; needs a GPU build of paddlepaddle")
     parser.add_argument("--font", type=Path)
     parser.add_argument("--font-size", type=int)
 
 
 def config_from_args(args):
     overrides = validate_config(read_json(args.config)) if args.config else {}
-    for key in PARAMETER_HELP:
+    for key in (*PARAMETER_HELP, "device"):
         value = getattr(args, key, None)
         if value is not None:
             overrides[key] = value
@@ -142,6 +149,13 @@ def build_engine(config):
     os.environ.setdefault("HF_HOME", str(CACHE / "huggingface"))
     os.environ.setdefault("PADDLE_PDX_MODEL_SOURCE", "BOS")
     started = time.perf_counter()
+    if config["device"].startswith("gpu"):
+        import paddle
+        if not paddle.is_compiled_with_cuda():
+            # Paddle would silently fall back to CPU and then crash with a segmentation fault.
+            raise ValueError(f"device {config['device']!r} needs the GPU build of paddlepaddle, but this "
+                             f"Python ({sys.executable}) has the CPU-only build. On Jetson use .venv-jetson, "
+                             "or run with --device cpu.")
     from paddleocr import PaddleOCR
     kwargs = {key: value for key, value in config.items() if key not in ("scale", "min_text_length")}
     # Reuse an existing read-only cache without writing outside this project.
@@ -168,7 +182,7 @@ def find_images(source, output=None, cache=CACHE, recursive=False):
         excluded.append(Path(output).resolve())
     candidates = source.rglob("*") if recursive else source.iterdir()
     images = sorted(p for p in candidates if p.is_file() and p.suffix.lower() in IMAGE_EXTENSIONS
-                    and not any(p.is_relative_to(folder) for folder in excluded))
+                    and not any(folder == p or folder in p.parents for folder in excluded))
     # stem_gt.json retains the legacy format; prevent png/jpg stem collisions.
     keys = [p.relative_to(source).with_suffix("") for p in images]
     if len(keys) != len(set(keys)):
