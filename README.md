@@ -323,3 +323,62 @@ Exit codes ของ CLI: 0 สำเร็จ, 1 รันไม่สำเร
 save/reopen, ignore และการนำ GT ที่บันทึกแล้วไปประเมินได้ทันที
 integration test ใช้ OCR จำลองเพื่อทดสอบระบบรายงาน ไม่ใช่ผลความแม่นยำของโมเดลจริง
 คำสั่ง OCR หนึ่งภาพด้านบนคือการตรวจรับโมเดลจริงก่อนเริ่มรอบทดลอง
+
+## รัน OCR ด้วย GPU (NVIDIA Jetson Orin NX)
+
+ค่าเริ่มต้นของทุกสคริปต์ยังเป็น `device: "cpu"` ต้องสั่งใช้ GPU เองในแต่ละรอบ
+รายละเอียดเต็มอยู่ใน [README_GPU.md](README_GPU.md)
+
+สภาพแวดล้อมที่ทดสอบแล้ว: JetPack 5.1.3 (L4T R35.5.0), CUDA 11.4, cuDNN 8.6, Python 3.8.10 ของระบบ,
+`paddlepaddle-gpu==3.0.0` (wheel `cp38-cp38-linux_aarch64`), `paddleocr==3.7.0`, `opencv-contrib-python==4.10.0.84`
+
+### ติดตั้ง
+
+`requirements.txt` ตรึง `paddlepaddle==3.0.0` ซึ่งเป็น build CPU บน Jetson ให้ใช้ `paddlepaddle-gpu` แทน
+และห้ามติดตั้งทั้งสองแพ็กเกจใน venv เดียวกัน PyPI ไม่มี wheel GPU สำหรับ Jetson ต้องดาวน์โหลด wheel
+ที่ build สำหรับ JetPack 5 / CUDA 11.4 / Python 3.8 มาติดตั้งเอง:
+
+```sh
+/usr/bin/python3 -m venv --system-site-packages .venv-jetson
+.venv-jetson/bin/python -m pip install /path/to/paddlepaddle_gpu-3.0.0-cp38-cp38-linux_aarch64.whl
+.venv-jetson/bin/python -m pip install paddleocr==3.7.0 opencv-contrib-python==4.10.0.84 'Pillow>=10,<13'
+```
+
+ตรวจว่า GPU ใช้งานได้ ต้องได้ `3.0.0 True 1`:
+
+```sh
+.venv-jetson/bin/python -c "import paddle; print(paddle.__version__, paddle.is_compiled_with_cuda(), paddle.device.cuda.device_count())"
+.venv-jetson/bin/python -c "import paddle; paddle.utils.run_check()"
+```
+
+### คำสั่งรัน
+
+ค่า `device` รับได้ `cpu` (ค่าเริ่มต้น), `gpu` หรือ `gpu:N` (Jetson มี GPU เดียวคือ `gpu:0`)
+
+```sh
+# สร้างร่าง GT และประเมินด้วย GPU
+.venv-jetson/bin/python create_gt.py --device gpu:0
+.venv-jetson/bin/python evaluate_ocr.py --device gpu:0
+
+# หรือใช้ไฟล์ config ที่มี {"device": "gpu:0"}
+.venv-jetson/bin/python evaluate_ocr.py --config gpu.json
+```
+
+`experiment_ocr.py` ไม่มี `--device` ให้ใส่ `"device": "gpu:0"` ใน `parameters` ของแต่ละชุดในไฟล์ `--experiments`
+(ถ้าไม่ใส่ไฟล์ ชุดอัตโนมัติจะรันบน CPU ตาม baseline):
+
+```json
+{"experiments": [{"name": "baseline-gpu", "parameters": {"device": "gpu:0"}}]}
+```
+
+หน้าเว็บ OCR Workbench ส่งค่า `"device": "gpu:0"` ใน config ได้ แต่ต้องรัน backend ด้วย `.venv-jetson/bin/python -m uvicorn ...`
+และติดตั้ง dependency ของ backend ตาม [web/README.md](web/README.md) ลงใน `.venv-jetson`
+
+### ข้อควรรู้
+
+- เวลาที่วัดบน GPU เทียบกับ CPU ไม่ได้ และผลอ่านบางกรอบอาจต่างกันเล็กน้อย รายงานบันทึก `device` ไว้ทุกรอบ ให้เทียบเฉพาะรอบที่ใช้ device เดียวกัน
+- รอบแรกช้าเพราะโหลดโมเดลและ warm-up CUDA ให้ดู `model_load_seconds` แยกจากเวลาต่อภาพ
+- ถ้าสั่ง `--device gpu` กับ Python ที่มี build CPU สคริปต์จะหยุดพร้อมข้อความ `needs the GPU build of paddlepaddle` แทนการ crash ให้ใช้ `.venv-jetson` หรือ `--device cpu`
+- `evaluate_ocr.py` บันทึกเวอร์ชันเป็น `3.0.0 (gpu)` เมื่อติดตั้ง `paddlepaddle-gpu`
+- Orin NX 8GB ใช้ RAM ร่วมกันระหว่าง CPU/GPU ถ้าไม่พอให้ลด `text_det_limit_side_len` หรือ `scale` ดูการใช้งานด้วย `tegrastats`
+- ก่อนวัดเวลาให้ตั้งโหมดพลังงานสูงสุด: `sudo nvpmodel -m 0 && sudo jetson_clocks`
