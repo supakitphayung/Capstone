@@ -20,6 +20,8 @@ class JobRequest(BaseModel):
     drafts: str = "GroundTruthDraft"
     output: str | None = None
     config: dict[str, Any] = Field(default_factory=dict)
+    # Applies to every OCR run of the job (all trials of an experiment); None keeps the config's own device.
+    device: str | None = Field(default=None, pattern=r"^(cpu|gpu(:\d+)?)$")
     ids: list[str] = Field(default_factory=list)
     recursive: bool = False
     overwrite: bool = False

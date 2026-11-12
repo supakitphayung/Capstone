@@ -20,3 +20,6 @@ venv/
 # Local secrets, if ever added
 .env
 .env.*
+
+# paddlepaddle-gpu wheel ที่ดาวน์โหลดมาเองสำหรับ Dockerfile.jetson
+wheels/*.whl

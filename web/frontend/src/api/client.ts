@@ -1,4 +1,4 @@
-import type { Catalog, Dataset, Health, Job, Preset, ResultDetail, ResultEntry, RunRequest } from '../types';
+import type { Catalog, Dataset, Health, Job, Preset, ResponseLogEntry, ResultDetail, ResultEntry, RunRequest } from '../types';
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`/api${path}`, {
@@ -25,6 +25,7 @@ export const api = {
   logs: (id: string, source: string, offset: number) => request<{ text: string; offset: number }>(`/jobs/${id}/logs?${new URLSearchParams({ source, offset: String(offset) })}`),
   results: () => request<ResultEntry[]>('/results'),
   result: (id: string) => request<ResultDetail>(`/results/${id}`),
+  responseLogs: (filters: { q: string; errors_only: boolean; method: string }) => request<{ folder: string; entries: ResponseLogEntry[] }>(`/response-logs?${new URLSearchParams({ limit: "200", q: filters.q, errors_only: String(filters.errors_only), method: filters.method })}`),
 };
 
 export function artifactUrl(path: string, download = false) {

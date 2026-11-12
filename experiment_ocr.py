@@ -139,16 +139,17 @@ def run_trial(trial, manifest_path, split, output, timeout=1800, font=None, font
     return report
 
 
-def combined_trial(reports):
+def combined_trial(reports, base=None):
     """Combine the winning one-factor values, using tuning results exclusively."""
+    base = base or BASELINE
     completed = [report for report in reports if report["status"] == "completed" and report.get("split") == "tune"]
-    baseline = next((report for report in completed if report["config"] == BASELINE), None)
+    baseline = next((report for report in completed if report["config"] == base), None)
     if baseline is None:
         return None
-    combined = dict(BASELINE)
+    combined = dict(base)
     for key in SWEEP:
         candidates = [report for report in completed if all(
-            report["config"][other] == BASELINE[other] for other in BASELINE if other != key)]
+            report["config"][other] == base[other] for other in base if other != key)]
         winner = min(candidates, key=ranking_key)
         combined[key] = winner["config"][key]
     if any(report["config"] == combined for report in reports):
@@ -202,6 +203,7 @@ def main():
     parser.add_argument("--tune-only", action="store_true", help="Do not run holdout or require its GT yet")
     parser.add_argument("--no-combine", action="store_true")
     parser.add_argument("--dry-run", action="store_true", help="Explain actual settings without loading OCR or requiring GT")
+    parser.add_argument("--device", help="Run every trial on cpu, gpu, or gpu:N (overrides each trial's device); needs a GPU build of paddlepaddle for gpu")
     parser.add_argument("--font", type=Path)
     parser.add_argument("--font-size", type=int)
     parser.add_argument("--worker", type=Path, help=argparse.SUPPRESS)
@@ -211,6 +213,8 @@ def main():
     if not math.isfinite(args.timeout) or args.timeout <= 0 or (args.font_size is not None and args.font_size <= 0):
         raise ValueError("Timeout and font size must be positive")
     trials = load_trials(args.experiments) if args.experiments else automatic_trials()
+    if args.device is not None:
+        trials = [{**trial, "config": validate_config({**trial["config"], "device": args.device})} for trial in trials]
     records = load_records(args.split_file, args.input, args.tune_only)
     if args.dry_run:
         print(f"{len(trials)} initial trials; images: {[record['relative'] for record in records]}")
@@ -232,7 +236,7 @@ def main():
         summary["trials"].append(report)
         write_comparison(run_dir, summary)
     if not args.experiments and not args.no_combine:
-        combined = combined_trial(summary["trials"])
+        combined = combined_trial(summary["trials"], validate_config({"device": args.device}) if args.device else None)
         if combined:
             summary["trials"].append(run_trial(combined, manifest_path, "tune", run_dir / "trials" / combined["name"],
                                                 args.timeout, args.font, args.font_size))

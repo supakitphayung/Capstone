@@ -327,7 +327,7 @@ integration test ใช้ OCR จำลองเพื่อทดสอบร�
 ## รัน OCR ด้วย GPU (NVIDIA Jetson Orin NX)
 
 ค่าเริ่มต้นของทุกสคริปต์ยังเป็น `device: "cpu"` ต้องสั่งใช้ GPU เองในแต่ละรอบ
-รายละเอียดเต็มอยู่ใน [README_GPU.md](README_GPU.md)
+ถ้าจะรันผ่าน Docker ให้ดู [web/README.md](web/README.md) หัวข้อ "รันด้วย Docker บน Jetson (GPU)"
 
 สภาพแวดล้อมที่ทดสอบแล้ว: JetPack 5.1.3 (L4T R35.5.0), CUDA 11.4, cuDNN 8.6, Python 3.8.10 ของระบบ,
 `paddlepaddle-gpu==3.0.0` (wheel `cp38-cp38-linux_aarch64`), `paddleocr==3.7.0`, `opencv-contrib-python==4.10.0.84`
@@ -364,15 +364,21 @@ integration test ใช้ OCR จำลองเพื่อทดสอบร�
 .venv-jetson/bin/python evaluate_ocr.py --config gpu.json
 ```
 
-`experiment_ocr.py` ไม่มี `--device` ให้ใส่ `"device": "gpu:0"` ใน `parameters` ของแต่ละชุดในไฟล์ `--experiments`
-(ถ้าไม่ใส่ไฟล์ ชุดอัตโนมัติจะรันบน CPU ตาม baseline):
+`experiment_ocr.py` ใช้ `--device` กับทุกชุดค่า ทั้งชุดอัตโนมัติและชุดในไฟล์ `--experiments` (ค่านี้ทับ `device` ในแต่ละชุด):
 
-```json
-{"experiments": [{"name": "baseline-gpu", "parameters": {"device": "gpu:0"}}]}
+```sh
+.venv-jetson/bin/python experiment_ocr.py --device gpu:0
 ```
 
-หน้าเว็บ OCR Workbench ส่งค่า `"device": "gpu:0"` ใน config ได้ แต่ต้องรัน backend ด้วย `.venv-jetson/bin/python -m uvicorn ...`
-และติดตั้ง dependency ของ backend ตาม [web/README.md](web/README.md) ลงใน `.venv-jetson`
+หน้าเว็บ OCR Workbench มีช่อง "ประมวลผลด้วย" ให้เลือก CPU หรือ GPU (gpu:0) ทุกขั้น ตัวเลือก GPU จะกดได้เมื่อ Python
+ที่ใช้รันสคริปต์ติดตั้ง `paddlepaddle-gpu` อยู่ backend ต้องใช้ Python 3.10 ขึ้นไป (FastAPI ที่ตรึงไว้ไม่รองรับ 3.8)
+จึงรัน backend ด้วย Python ใหม่กว่าแยกต่างหาก แล้วชี้ให้สคริปต์รันด้วย `.venv-jetson` ผ่าน `OCR_PYTHON`:
+
+```sh
+OCR_PYTHON=$PWD/.venv-jetson/bin/python /path/to/python3.12-venv/bin/python -m uvicorn web.backend.app.main:app --host 127.0.0.1 --port 8000 --workers 1
+```
+
+หรือใช้ Docker ซึ่งเตรียม Python ทั้งสองตัวไว้ให้แล้ว
 
 ### ข้อควรรู้
 

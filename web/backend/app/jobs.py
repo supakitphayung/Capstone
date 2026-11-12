@@ -62,6 +62,10 @@ class Jobs:
         return item
 
     async def start(self, request: JobRequest):
+        if request.script == "gt_editor" and os.environ.get("OCR_HEADLESS") == "1":
+            # Docker has no desktop session for the PyQt5 window.
+            raise ValueError("ระบบนี้รันใน Docker จึงเปิดโปรแกรมตรวจแก้เฉลยจากหน้าเว็บไม่ได้ "
+                             "ให้เปิดบนเครื่องโดยตรงด้วยคำสั่ง python gt_editor.py แล้วกลับมาทำขั้นถัดไปที่หน้าเว็บ")
         async with self.lock:
             for item in self.items.values():
                 if item["status"] not in ACTIVE:

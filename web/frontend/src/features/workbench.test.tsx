@@ -20,33 +20,33 @@ const presets: Preset[] = [{ id: 'saved', name: 'รอบก่อน · winner
 const job: Job = { id: 'job123', script: 'create_gt', status: 'running', created_utc: '2026-10-21T00:00:00Z', finished_utc: null, returncode: null, command: 'python create_gt.py', output: 'GroundTruthDraft', error: null, result_ids: [], log_sources: ['console'] };
 
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
-function form(script: 'create_gt' | 'experiment_ocr' | 'gt_editor' = 'create_gt') {
+function form(script: 'create_gt' | 'experiment_ocr' | 'gt_editor' = 'create_gt', formCatalog: Catalog = catalog) {
   vi.spyOn(api, 'preview').mockResolvedValue({ command: 'python script.py', output: null });
-  return render(<MemoryRouter><Routes><Route path="/" element={<RunForm script={script} catalog={catalog} dataset={dataset} presets={presets} />} /><Route path="/jobs/:id" element={<p>หน้าติดตามงาน</p>} /></Routes></MemoryRouter>);
+  return render(<MemoryRouter><Routes><Route path="/" element={<RunForm script={script} catalog={formCatalog} dataset={dataset} presets={presets} />} /><Route path="/jobs/:id" element={<p>หน้าติดตามงาน</p>} /></Routes></MemoryRouter>);
 }
 
 describe('run configuration', () => {
   it('selects a saved preset, edits advanced parameters, resets to baseline and starts a job', async () => {
     const start = vi.spyOn(api, 'start').mockResolvedValue(job);
     form();
-    fireEvent.change(screen.getByLabelText('ค่าเริ่มต้นของ OCR'), { target: { value: 'saved' } });
+    fireEvent.change(screen.getByLabelText('ชุดค่าที่ใช้อ่านภาพ'), { target: { value: 'saved' } });
     expect(screen.getByLabelText('text_det_limit_side_len')).toHaveValue(1600);
     fireEvent.change(screen.getByLabelText('text_det_thresh'), { target: { value: '.2' } });
-    fireEvent.click(screen.getByRole('button', { name: 'คืนค่า Baseline' }));
+    fireEvent.click(screen.getByRole('button', { name: 'กลับไปใช้ค่ามาตรฐาน' }));
     expect(screen.getByLabelText('text_det_limit_side_len')).toHaveValue(2560);
-    fireEvent.click(screen.getByLabelText('สร้าง draft ทับของเดิม (overwrite)'));
-    fireEvent.click(screen.getByRole('button', { name: 'เริ่มรัน Script' }));
+    fireEvent.click(screen.getByLabelText('อ่านใหม่ทับร่างเดิม'));
+    fireEvent.click(screen.getByRole('button', { name: 'เริ่มอ่านภาพ' }));
     await screen.findByText('หน้าติดตามงาน');
     expect(start.mock.calls[0][0]).toMatchObject({ config: baseline, overwrite: true });
   });
   it('supports named custom trials, preset selection and tune-only', async () => {
     const start = vi.spyOn(api, 'start').mockResolvedValue({ ...job, script: 'experiment_ocr' });
     form('experiment_ocr');
-    fireEvent.change(screen.getByLabelText('ชุดการทดลอง'), { target: { value: 'custom' } });
-    fireEvent.change(screen.getByLabelText('ค่าเริ่มต้นของ OCR'), { target: { value: 'saved' } });
+    fireEvent.change(screen.getByLabelText('วิธีทดลอง'), { target: { value: 'custom' } });
+    fireEvent.change(screen.getByLabelText('ชุดค่าที่ใช้อ่านภาพ'), { target: { value: 'saved' } });
     fireEvent.change(screen.getByLabelText('ชื่อชุดทดลอง'), { target: { value: 'compact' } });
-    fireEvent.click(screen.getByLabelText(/Tune only/));
-    fireEvent.click(screen.getByRole('button', { name: 'เริ่มรัน Script' }));
+    fireEvent.click(screen.getByLabelText('ข้ามการทดสอบสุดท้าย'));
+    fireEvent.click(screen.getByRole('button', { name: 'เริ่มทดลอง' }));
     await screen.findByText('หน้าติดตามงาน');
     expect(start.mock.calls[0][0]).toMatchObject({ experiment_mode: 'custom', tune_only: true,
       experiments: [{ name: 'compact', parameters: { text_det_limit_side_len: 1600 } }] });
@@ -54,17 +54,30 @@ describe('run configuration', () => {
   it('shows a rejected concurrent run without losing selected parameters', async () => {
     vi.spyOn(api, 'start').mockRejectedValue(new Error('มีงานกำลังทำงานอยู่'));
     form();
-    fireEvent.click(screen.getByRole('button', { name: 'เริ่มรัน Script' }));
+    fireEvent.click(screen.getByRole('button', { name: 'เริ่มอ่านภาพ' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('มีงานกำลังทำงานอยู่');
     expect(screen.getByLabelText('text_det_limit_side_len')).toHaveValue(2560);
   });
   it('launches the original desktop editor without OCR configuration controls', async () => {
     const start = vi.spyOn(api, 'start').mockResolvedValue({ ...job, script: 'gt_editor' });
     form('gt_editor');
-    expect(screen.queryByLabelText('ค่าเริ่มต้นของ OCR')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'เปิด GT Editor' }));
+    expect(screen.queryByLabelText('ชุดค่าที่ใช้อ่านภาพ')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'เปิดโปรแกรมตรวจแก้' }));
     await screen.findByText('หน้าติดตามงาน');
     expect(start.mock.calls[0][0].script).toBe('gt_editor');
+  });
+  it('defaults to the GPU when the scripts have paddlepaddle-gpu and applies it to automatic experiments', async () => {
+    const start = vi.spyOn(api, 'start').mockResolvedValue({ ...job, script: 'experiment_ocr' });
+    form('experiment_ocr', { ...catalog, device: { gpu_build: true, help: '' } });
+    expect(screen.getByLabelText('ประมวลผลด้วย')).toHaveValue('gpu:0');
+    fireEvent.click(screen.getByRole('button', { name: 'เริ่มทดลอง' }));
+    await screen.findByText('หน้าติดตามงาน');
+    expect(start.mock.calls[0][0]).toMatchObject({ experiment_mode: 'automatic', device: 'gpu:0' });
+  });
+  it('keeps the CPU and disables the GPU option without paddlepaddle-gpu', () => {
+    form();
+    expect(screen.getByLabelText('ประมวลผลด้วย')).toHaveValue('cpu');
+    expect(screen.getByRole('option', { name: /GPU/ })).toBeDisabled();
   });
   it('builds an independent baseline copy for every form', () => {
     const first = defaultRequest('create_gt', baseline), second = defaultRequest('create_gt', baseline);
@@ -79,7 +92,7 @@ describe('job tracking and results', () => {
     vi.spyOn(api, 'logs').mockResolvedValue({ text: 'กำลังอ่านภาพ 1.png\n', offset: 10 });
     const cancel = vi.spyOn(api, 'cancel').mockResolvedValue({ ...job, status: 'cancelled' });
     render(<MemoryRouter><JobPanel id="job123" /></MemoryRouter>);
-    expect(await screen.findByLabelText('Logs ของงาน')).toHaveTextContent('กำลังอ่านภาพ');
+    expect(await screen.findByLabelText('รายละเอียดการทำงาน')).toHaveTextContent('กำลังอ่านภาพ');
     fireEvent.click(await screen.findByRole('button', { name: 'ยกเลิกงานนี้' }));
     await waitFor(() => expect(cancel).toHaveBeenCalledWith('job123'));
   });
@@ -91,8 +104,8 @@ describe('job tracking and results', () => {
       details: { pos1: { status: 'correct', expected: 'ยา', got: 'ยา', iou: .9, cer: 0 } } };
     render(<MemoryRouter><ReportView report={{ status: 'completed', metrics, ocr_seconds: 10, completed_images: 2, model_load_seconds: 1, elapsed_seconds: 12,
       images: [{ id: '1', filename: '1.png', status: 'completed', ocr_seconds: 4, metrics }, { id: '2', filename: '2.png', status: 'completed', ocr_seconds: 6, metrics }] }} /></MemoryRouter>);
-    expect(screen.getByText('เวลา OCR รวม').parentElement).toHaveTextContent('10.000');
-    expect(screen.getByText('เวลา OCR เฉลี่ยต่อภาพ').parentElement).toHaveTextContent('5.000');
+    expect(screen.getByText('เวลาอ่านภาพทั้งหมด').parentElement).toHaveTextContent('10.00');
+    expect(screen.getByText('เวลาอ่านเฉลี่ยต่อภาพ').parentElement).toHaveTextContent('5.00');
     fireEvent.click(screen.getByRole('button', { name: '2.png' }));
     expect(screen.getAllByText('ยา').length).toBe(2);
   });

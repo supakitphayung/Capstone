@@ -25,6 +25,10 @@ class Settings:
         return self.root / ".webui/jobs"
 
     @property
+    def logs_dir(self):
+        return self.root / ".webui/logs"
+
+    @property
     def frontend(self):
         return PROJECT_ROOT / "web/frontend/dist"
 

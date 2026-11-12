@@ -1,11 +1,13 @@
 """Run from the repository root: python -m uvicorn web.backend.app.main:app."""
+import time
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 
 from .config import Settings
 from .jobs import JobConflict, Jobs
+from .response_log import ResponseLog
 from .routes import router
 
 
@@ -21,10 +23,10 @@ def create_app(settings: Settings | None = None):
 
     app = FastAPI(title="OCR Workbench API", version="1.0.0", lifespan=lifespan)
     app.state.settings, app.state.jobs = settings, jobs
+    app.state.response_log = response_log = ResponseLog(settings.logs_dir)
     app.include_router(router)
 
-    @app.middleware("http")
-    async def local_requests(request: Request, call_next):
+    async def guarded(request: Request, call_next):
         # Prevent another website from using this local process-launching API.
         origin = request.headers.get("origin")
         allowed = {"http://127.0.0.1:5173", "http://localhost:5173", "http://127.0.0.1:8000", "http://localhost:8000"}
@@ -35,6 +37,29 @@ def create_app(settings: Settings | None = None):
             return JSONResponse({"detail": "เว็บนี้รองรับการใช้งานผ่าน localhost เท่านั้น"}, status_code=403)
         response = await call_next(request)
         response.headers["X-Content-Type-Options"] = "nosniff"
+        return response
+
+    @app.middleware("http")
+    async def local_requests(request: Request, call_next):
+        path = request.url.path
+        # The log viewer's own requests are left out so reading the log does not grow it.
+        if not path.startswith("/api/") or path.startswith("/api/response-logs"):
+            return await guarded(request, call_next)
+        started = time.perf_counter()
+        request_body = await request.body() if request.method in ("POST", "PUT", "PATCH") else b""
+        response = await guarded(request, call_next)
+        content_type = response.headers.get("content-type", "")
+        body = None
+        if content_type.startswith("application/json"):
+            # Only JSON is buffered; images and downloads keep streaming and are logged without a body.
+            if hasattr(response, "body_iterator"):
+                body = b"".join([chunk async for chunk in response.body_iterator])
+                response = Response(body, status_code=response.status_code, headers=dict(response.headers))
+            else:
+                body = response.body
+        response_log.record(method=request.method, path=path, query=request.url.query,
+                            status=response.status_code, duration_ms=(time.perf_counter() - started) * 1000,
+                            content_type=content_type, request_body=request_body, response_body=body)
         return response
 
     @app.exception_handler(ValueError)

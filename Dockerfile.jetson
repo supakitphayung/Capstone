@@ -1,0 +1,70 @@
+# OCR Workbench แบบ GPU สำหรับ NVIDIA Jetson (JetPack 5 / L4T R35, CUDA 11.4, cuDNN 8.6)
+# build และรันบนตัว Jetson เท่านั้น ดูขั้นตอนใน web/README.md หัวข้อ "รันด้วย Docker บน Jetson (GPU)"
+#
+# ใช้ Python สองตัวแยกกัน:
+#   /opt/ocr  Python 3.8 ของระบบ + paddlepaddle-gpu (wheel Jetson มีให้เฉพาะ cp38) ใช้รันสคริปต์ OCR
+#   /opt/web  Python 3.12 สำหรับหน้าเว็บ (FastAPI ที่ตรึงไว้ไม่รองรับ 3.8) สั่งรันสคริปต์ผ่าน OCR_PYTHON
+# ต้องวาง wheel paddlepaddle_gpu-3.0.0-cp38-cp38-linux_aarch64.whl ไว้ในโฟลเดอร์ wheels/ ก่อน build
+
+ARG L4T_IMAGE=nvcr.io/nvidia/l4t-jetpack:r35.4.1
+
+# ---- 1) build หน้าเว็บ ----
+FROM node:22-slim AS frontend
+WORKDIR /build
+COPY web/frontend/package.json web/frontend/package-lock.json ./
+RUN npm ci
+COPY web/frontend/ ./
+RUN npm run build
+
+# ---- 2) JetPack + PaddlePaddle GPU ----
+FROM ${L4T_IMAGE}
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends python3 python3-venv python3-pip \
+       libgl1 libglib2.0-0 libgomp1 fonts-tlwg-garuda-ttf ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY requirements.txt ./requirements.txt
+COPY web/backend/requirements.txt ./web/backend/requirements.txt
+COPY wheels/ /tmp/wheels/
+
+# Python 3.8 สำหรับ OCR: ติดตั้ง paddlepaddle-gpu จาก wheel แทน paddlepaddle (CPU) และข้าม PyQt5
+RUN set -e; \
+    count=$(ls /tmp/wheels/paddlepaddle_gpu-*-cp38-cp38-linux_aarch64.whl 2>/dev/null | wc -l); \
+    if [ "$count" -ne 1 ]; then \
+      echo "ต้องมี wheel paddlepaddle_gpu-*-cp38-cp38-linux_aarch64.whl ในโฟลเดอร์ wheels/ หนึ่งไฟล์ (พบ $count)" >&2; exit 1; \
+    fi; \
+    /usr/bin/python3 -m venv /opt/ocr; \
+    /opt/ocr/bin/python -m pip install --no-cache-dir --upgrade "pip<25.1"; \
+    /opt/ocr/bin/python -m pip install --no-cache-dir /tmp/wheels/paddlepaddle_gpu-*-cp38-cp38-linux_aarch64.whl; \
+    grep -v -i -E '^(PyQt5|paddlepaddle)' requirements.txt > /tmp/ocr-requirements.txt; \
+    /opt/ocr/bin/python -m pip install --no-cache-dir -r /tmp/ocr-requirements.txt; \
+    /opt/ocr/bin/python -m pip check || true; \
+    rm -rf /tmp/wheels /tmp/ocr-requirements.txt
+
+# Python 3.12 สำหรับหน้าเว็บ (ติดตั้งด้วย uv เพราะ Ubuntu 20.04 ไม่มี Python ใหม่กว่า 3.8)
+COPY --from=ghcr.io/astral-sh/uv:0.8.0 /uv /usr/local/bin/uv
+ENV UV_PYTHON_INSTALL_DIR=/opt/python
+RUN uv venv --python 3.12 /opt/web \
+    && uv pip install --no-cache --python /opt/web/bin/python -r web/backend/requirements.txt
+
+COPY create_gt.py evaluate_ocr.py experiment_ocr.py gt_editor.py ./
+COPY helpers/ helpers/
+COPY experiments/ experiments/
+COPY web/backend/app/ web/backend/app/
+COPY --from=frontend /build/dist web/frontend/dist
+
+RUN mkdir -p images GroundTruthDraft GroundTruth evaluation_output experiment_output .ocr_cache .webui /tmp/home \
+    && chmod -R a+rwX /app /tmp/home
+
+ENV HOME=/tmp/home \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    OCR_HEADLESS=1 \
+    OCR_PYTHON=/opt/ocr/bin/python
+
+EXPOSE 8000
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s \
+    CMD /opt/web/bin/python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=8)" || exit 1
+CMD ["/opt/web/bin/python", "-m", "uvicorn", "web.backend.app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]

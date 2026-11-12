@@ -31,8 +31,8 @@ async def health(request: Request):
 
 
 @router.get("/scripts")
-def scripts():
-    return catalog()
+def scripts(request: Request):
+    return catalog(request.app.state.settings)
 
 
 @router.get("/dataset")
@@ -73,6 +73,14 @@ def logs(job_id: str, request: Request, source: str = "console", offset: int = Q
 @router.post("/jobs/{job_id}/cancel")
 async def cancel(job_id: str, request: Request):
     return await request.app.state.jobs.cancel(job_id)
+
+
+@router.get("/response-logs")
+def response_logs(request: Request, limit: int = Query(200, ge=1, le=1000), errors_only: bool = False,
+                  method: str = "", q: str = ""):
+    settings = request.app.state.settings
+    return {"folder": settings.relative(settings.logs_dir),
+            "entries": request.app.state.response_log.entries(limit, errors_only, method, q)}
 
 
 @router.get("/results")

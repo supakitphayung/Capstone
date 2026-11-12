@@ -6,6 +6,7 @@ export interface Catalog {
   baseline: Config;
   parameter_help: Record<string, string>;
   automatic_trials: { name: string; config: Config }[];
+  device?: { gpu_build: boolean; help: string };
 }
 export interface DatasetImage { id: string; file: string; path: string; draft: boolean; gt: boolean; draft_preview: string | null; gt_preview: string | null }
 export interface Dataset { images: DatasetImage[]; folders: Record<string, boolean> }
@@ -15,7 +16,7 @@ export interface RunRequest {
   ids: string[]; recursive: boolean; overwrite: boolean; timeout: number;
   tune_only: boolean; combine: boolean; dry_run: boolean; split_file: string;
   experiment_mode: 'automatic' | 'custom'; experiments: Trial[];
-  output?: string; font?: string; font_size?: number;
+  output?: string; font?: string; font_size?: number; device?: string;
 }
 export interface Job {
   id: string; script: ScriptId; status: string; created_utc: string; finished_utc: string | null;
@@ -46,3 +47,7 @@ export interface Comparison { status: string; dataset_id: string; best_trial: st
 export interface ResultEntry { id: string; kind: 'experiment' | 'evaluation'; name: string; path: string; status: string; created_utc: string | null; best_trial?: string | null }
 export interface ResultDetail extends ResultEntry { report: Report | Comparison; selected_config_path: string | null }
 export interface Health { status: string; python: string; root: string; dependencies: Record<string, boolean>; error: string | null }
+export interface ResponseLogEntry {
+  id: string; time: string; method: string; path: string; query: string; status: number; duration_ms: number;
+  content_type: string; size: number | null; request: unknown; response: unknown; truncated: boolean;
+}

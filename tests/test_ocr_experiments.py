@@ -114,6 +114,11 @@ class ExperimentSelectionTests(unittest.TestCase):
             "text_det_limit_side_len": 3200, "text_det_unclip_ratio": 1.2,
         }))
         self.assertEqual(experiment_ocr.choose_best(reports)["name"], "tight-thai-lines")
+        # The same sweep run with --device gpu:0 combines against the GPU baseline.
+        gpu = [{**item, "config": {**item["config"], "device": "gpu:0"}} for item in reports]
+        self.assertIsNone(experiment_ocr.combined_trial(gpu))
+        gpu_combined = experiment_ocr.combined_trial(gpu, validate_config({"device": "gpu:0"}))
+        self.assertEqual(gpu_combined["config"], {**combined["config"], "device": "gpu:0"})
 
     def test_dry_run_lists_focused_configs_without_gt_or_loading_ocr(self):
         with tempfile.TemporaryDirectory(prefix="ocr-dry-run-test-") as temporary:
@@ -133,6 +138,11 @@ class ExperimentSelectionTests(unittest.TestCase):
             for name in ("tight-thai-lines", "thai-diacritics", "large-touching-text"):
                 self.assertIn(name, output)
             self.assertIn("min_text_length = 2", output)
+            stdout = io.StringIO()
+            with patch.object(sys, "argv", [*argv, "--device", "gpu:0"]), contextlib.redirect_stdout(stdout):
+                self.assertEqual(experiment_ocr.main(), 0)
+            self.assertNotIn("device = 'cpu'", stdout.getvalue())
+            self.assertIn("device = 'gpu:0'", stdout.getvalue())
 
 
 if __name__ == "__main__":

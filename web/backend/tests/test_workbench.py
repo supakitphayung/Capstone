@@ -151,6 +151,16 @@ class WorkbenchTests(unittest.TestCase):
         self.assertEqual(stored["experiments"][0]["parameters"]["text_det_limit_side_len"], 1600)
         self.wait(item["id"])
 
+    def test_device_applies_to_config_and_every_experiment_trial(self):
+        create = build_command(self.settings, JobRequest(script="create_gt", device="gpu:0", config={"device": "cpu"}), "test")
+        self.assertEqual(create["config"]["device"], "gpu:0")
+        self.assertNotIn("--device", create["args"])
+        experiment = build_command(self.settings, JobRequest(script="experiment_ocr", device="gpu:0", tune_only=True), "test")
+        self.assertEqual(experiment["args"][experiment["args"].index("--device") + 1], "gpu:0")
+        self.assertNotIn("--device", build_command(self.settings, JobRequest(script="experiment_ocr", tune_only=True), "test")["args"])
+        self.assertEqual(self.client.post("/api/jobs/preview", json={"script": "create_gt", "device": "cuda"}).status_code, 422)
+        self.assertIn("gpu_build", self.client.get("/api/scripts").json()["device"])
+
     def test_invalid_config_missing_gt_duplicate_names_and_unknown_scripts(self):
         for payload in ({"script": "unknown"}, {"script": "create_gt", "config": {"cpu_threads": 8}},
                         {"script": "create_gt", "config": {"text_det_thresh": 2}},
@@ -219,6 +229,26 @@ class WorkbenchTests(unittest.TestCase):
         self.assertEqual(item["status"], "failed")
         self.assertTrue(item["error"])
         self.assertEqual(self.client.get("/api/jobs").json()[0]["status"], "failed")
+
+    def test_response_log_keeps_bodies_once_per_unchanged_poll(self):
+        for _ in range(3):
+            self.client.get("/api/scripts")
+        self.client.post("/api/jobs/preview", json={"script": "create_gt"})
+        self.client.post("/api/jobs/preview", json={"script": "nope"})
+        log = self.client.get("/api/response-logs").json()
+        entries = log["entries"]
+        self.assertEqual(log["folder"], ".webui/logs")
+        self.assertEqual([entry["path"] for entry in entries],
+                         ["/api/jobs/preview", "/api/jobs/preview", "/api/scripts"])
+        self.assertEqual(entries[0]["status"], 422)
+        self.assertEqual(entries[1]["request"], {"script": "create_gt"})
+        self.assertIn("create_gt.py", entries[1]["response"]["command"])
+        self.assertIn("baseline", entries[2]["response"])
+        errors = self.client.get("/api/response-logs", params={"errors_only": True}).json()["entries"]
+        self.assertEqual([entry["status"] for entry in errors], [422])
+        self.assertEqual(len(self.client.get("/api/response-logs", params={"method": "get"}).json()["entries"]), 1)
+        self.assertEqual(len(self.client.get("/api/response-logs", params={"q": "nope"}).json()["entries"]), 1)
+        self.assertEqual(len(list(self.settings.logs_dir.glob("responses-*.jsonl"))), 1)
 
 
 if __name__ == "__main__":

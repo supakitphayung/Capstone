@@ -1,0 +1,32 @@
+# OCR Workbench แบบ GPU บน NVIDIA Jetson (ต้องมี nvidia-container-runtime ซึ่งมากับ JetPack)
+# วาง wheel paddlepaddle-gpu ไว้ใน wheels/ แล้วเริ่มใช้งาน:
+#   docker compose -f docker-compose.jetson.yml up --build   แล้วเปิด http://127.0.0.1:8000
+# ให้ไฟล์ผลลัพธ์เป็นของผู้ใช้ปัจจุบัน:
+#   OCR_UID=$(id -u) OCR_GID=$(id -g) docker compose -f docker-compose.jetson.yml up --build
+services:
+  workbench:
+    build:
+      context: .
+      dockerfile: Dockerfile.jetson
+    image: ocr-workbench:jetson
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=all
+    user: "${OCR_UID:-0}:${OCR_GID:-0}"
+    # ผู้ใช้ที่ไม่ใช่ root ต้องอยู่กลุ่ม video จึงจะเข้าถึง GPU ของ Jetson ได้
+    group_add:
+      - video
+    ports:
+      # เปิดให้เข้าได้จากเครื่องนี้เท่านั้น เปลี่ยนพอร์ตด้วย OCR_PORT=8001
+      - "127.0.0.1:${OCR_PORT:-8000}:8000"
+    volumes:
+      - ./images:/app/images
+      - ./GroundTruthDraft:/app/GroundTruthDraft
+      - ./GroundTruth:/app/GroundTruth
+      - ./evaluation_output:/app/evaluation_output
+      - ./experiment_output:/app/experiment_output
+      - ./experiments:/app/experiments
+      - ./.ocr_cache:/app/.ocr_cache
+      - ./.webui:/app/.webui
+    restart: unless-stopped

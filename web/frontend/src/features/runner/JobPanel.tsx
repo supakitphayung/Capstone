@@ -1,10 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowUpRight, LoaderCircle, Square, Terminal } from 'lucide-react';
+import { ArrowRight, ChevronDown, LoaderCircle, Square } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { api } from '../../api/client';
 import { useResource } from '../../app/hooks';
 import { activeStatus, date, Empty, ErrorNotice, Loading, Status } from '../../components/ui';
 import { scriptGuides } from '../../content/scripts';
+
+const outcomes: Record<string, string> = {
+  completed: 'งานนี้เสร็จเรียบร้อยแล้ว', completed_with_errors: 'งานเสร็จแล้ว แต่มีบางภาพที่ทำไม่สำเร็จ',
+  failed: 'งานนี้ไม่สำเร็จ เปิด “รายละเอียดการทำงาน” ด้านล่างเพื่อดูสาเหตุ', cancelled: 'งานนี้ถูกยกเลิก',
+  interrupted: 'งานนี้หยุดกลางคันเพราะระบบถูกปิด ลองเริ่มใหม่อีกครั้ง',
+};
 
 export function JobPanel({ id }: { id: string }) {
   const resource = useResource(() => api.job(id), 1000);
@@ -26,7 +32,7 @@ export function JobPanel({ id }: { id: string }) {
         offset = result.offset;
         setLogs(previous => (previous + result.text).slice(-250000));
         setLogError('');
-      } catch (cause) { if (current) setLogError(cause instanceof Error ? cause.message : 'อ่าน logs ไม่สำเร็จ'); }
+      } catch (cause) { if (current) setLogError(cause instanceof Error ? cause.message : 'อ่านรายละเอียดไม่สำเร็จ'); }
       if (current) timer = window.setTimeout(() => void poll(), 1000);
     };
     void poll();
@@ -40,17 +46,35 @@ export function JobPanel({ id }: { id: string }) {
     finally { setCancelling(false); }
   };
   if (!job) return resource.error ? <ErrorNotice message={resource.error} /> : <Loading />;
+  const active = activeStatus(job.status), editor = job.script === 'gt_editor';
+  const progress = job.progress;
+  const share = progress?.expected_images ? Math.min(100, Math.round(progress.completed_images / progress.expected_images * 100)) : null;
   return <div className="space-y-5"><ErrorNotice message={resource.error || cancelError || job.error || undefined} /><div className="card overflow-hidden">
-    <div className="section-heading"><div><p className="eyebrow mb-2">JOB / {job.id.slice(0, 8)}</p><h2>{scriptGuides[job.script].step}</h2><p>เริ่ม {date(job.created_utc)}{job.finished_utc && ` · สิ้นสุด ${date(job.finished_utc)}`}</p></div><Status status={job.status} /></div>
-    <div className="space-y-4 p-5 sm:p-6">
-      {job.progress ? <div className="progress-info"><span className="flex items-center gap-2">{activeStatus(job.status) && <LoaderCircle size={16} className="animate-spin" />}<b>{job.progress.stage}</b></span><span>ภาพสำเร็จ {job.progress.completed_images} / {job.progress.expected_images ?? '—'}</span>{job.script === 'experiment_ocr' && <span>trial/รอบที่สิ้นสุดแล้ว {job.progress.completed_trials}</span>}<span>{job.progress.model_loaded ? 'โหลดโมเดลแล้ว' : 'กำลังเตรียม / โหลดโมเดล'}</span></div> : activeStatus(job.status) && <div className="notice notice-info"><LoaderCircle size={17} className="animate-spin shrink-0" /><span>{job.script === 'gt_editor' ? 'GT Editor กำลังเปิดอยู่บน desktop ปิดผ่านหน้าต่าง GUI เมื่อทำงานเสร็จ' : 'กำลังเตรียมงาน ติดตามรายละเอียดจาก logs ด้านล่าง'}</span></div>}
-      {job.draft_report && <p className="text-sm text-slate-600">สร้าง draft สำเร็จ <b>{job.draft_report.processed}</b> ภาพ · ไม่สำเร็จ {job.draft_report.failures.length} ภาพ</p>}
-      <details className="command-preview"><summary><Terminal size={15} />คำสั่งที่ใช้จริง</summary><pre className="mt-3">{job.command}</pre></details>
-      <div className="flex flex-wrap items-center gap-3">{job.result_ids?.map((resultId, index) => <Link className="button button-primary" to={`/results/${resultId}`} key={resultId}>ดูผลลัพธ์{job.result_ids!.length > 1 ? ` ${index + 1}` : ''}<ArrowUpRight size={16} /></Link>)}{job.script === 'create_gt' && job.status === 'completed' && <Link className="button button-primary" to="/scripts/gt_editor">ตรวจแก้ใน GT Editor<ArrowUpRight size={16} /></Link>}{job.script !== 'gt_editor' && activeStatus(job.status) && <button className="button button-danger" disabled={cancelling || job.status === 'cancelling'} onClick={() => void cancel()}><Square size={14} />{cancelling || job.status === 'cancelling' ? 'กำลังหยุด…' : 'ยกเลิกงานนี้'}</button>}<span className="ml-auto font-mono text-xs text-slate-400">Exit code: {job.returncode ?? '—'}</span></div>
+    <div className="section-heading"><div><h2>{scriptGuides[job.script].step}</h2><p>เริ่ม {date(job.created_utc)}{job.finished_utc && ` · เสร็จ ${date(job.finished_utc)}`}</p></div><Status status={job.status} /></div>
+    <div className="space-y-5 p-5 sm:p-7">
+      {active && (editor
+        ? <div className="notice notice-info"><LoaderCircle size={20} className="animate-spin shrink-0" /><span>โปรแกรมตรวจแก้เปิดอยู่บนจอของเครื่องนี้ แก้และกดบันทึกในหน้าต่างนั้น เสร็จแล้วปิดหน้าต่างได้เลย</span></div>
+        : <div className="progress-info"><div className="flex items-center gap-2"><LoaderCircle size={18} className="animate-spin shrink-0" /><strong>{progress ? (progress.model_loaded ? 'กำลังอ่านภาพ' : 'กำลังเตรียมโปรแกรมอ่านข้อความ อาจใช้เวลาสักครู่') : 'กำลังเตรียมงาน'}</strong></div>
+          {progress && <><div className="progress-bar" role="progressbar" aria-label="ความคืบหน้า" aria-valuemin={0} aria-valuemax={100} aria-valuenow={share ?? undefined}><i style={{ width: `${share ?? 0}%` }} /></div><p>เสร็จแล้ว {progress.completed_images} จาก {progress.expected_images ?? '—'} ภาพ{job.script === 'experiment_ocr' && ` · ลองครบแล้ว ${progress.completed_trials} ชุดค่า`}</p></>}
+        </div>)}
+      {!active && outcomes[job.status] && <p className="job-outcome">{outcomes[job.status]}</p>}
+      {job.draft_report && <p className="job-outcome">อ่านสำเร็จ <b>{job.draft_report.processed}</b> ภาพ{job.draft_report.failures.length > 0 && ` · อ่านไม่สำเร็จ ${job.draft_report.failures.length} ภาพ`}</p>}
+      <div className="flex flex-wrap items-center gap-3">
+        {job.result_ids?.map((resultId, index) => <Link className="button button-primary button-large" to={`/results/${resultId}`} key={resultId}>ดูผลลัพธ์{job.result_ids!.length > 1 ? ` ${index + 1}` : ''}<ArrowRight size={18} /></Link>)}
+        {job.script === 'create_gt' && job.status === 'completed' && <Link className="button button-primary button-large" to="/scripts/gt_editor">ไปขั้นถัดไป: ตรวจแก้เฉลย<ArrowRight size={18} /></Link>}
+        {editor && job.status === 'completed' && <Link className="button button-primary button-large" to="/scripts/evaluate_ocr">ไปขั้นถัดไป: วัดความแม่นยำ<ArrowRight size={18} /></Link>}
+        {!editor && active && <button className="button button-danger" disabled={cancelling || job.status === 'cancelling'} onClick={() => void cancel()}><Square size={15} />{cancelling || job.status === 'cancelling' ? 'กำลังหยุด…' : 'ยกเลิกงานนี้'}</button>}
+      </div>
     </div>
   </div>
-  <div className="terminal-card"><div className="terminal-heading"><span className="flex items-center gap-2"><Terminal size={16} />Live output</span><div className="flex items-center gap-3"><select aria-label="แหล่งที่มาของ logs" className="terminal-select" value={source} onChange={event => setSource(event.target.value)}>{(job.log_sources || ['console']).map(item => <option key={item} value={item}>{item}</option>)}</select><label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={follow} onChange={event => setFollow(event.target.checked)} />ตาม logs</label></div></div><ErrorNotice message={logError} /><pre ref={terminal} aria-label="Logs ของงาน" className="terminal-output">{logs || 'กำลังรอ output จาก script…'}</pre><div className="terminal-footer"><span>อัปเดตทุก 1 วินาที · UTF-8</span><span>แสดงท้าย logs สูงสุด 250,000 อักขระ</span></div></div>
-  {job.script === 'experiment_ocr' && <p className="text-xs text-slate-500">เลือก trial:&lt;ชื่อ&gt; เพื่อดู logs ของ worker แต่ละชุด ส่วน console แสดงความคืบหน้าของตัวควบคุมการทดลอง</p>}
-  {!activeStatus(job.status) && !job.result_ids?.length && job.script !== 'gt_editor' && job.script !== 'create_gt' && <Empty title="ยังไม่มีรายงานผลสำหรับงานนี้">Dry-run จะแสดงแผนใน logs; งานที่หยุดก่อนสร้างรายงานอาจยังไม่มีผลลัพธ์</Empty>}
+  <details className="card details-card" open={job.status === 'failed'}>
+    <summary><span>รายละเอียดการทำงาน<small>ข้อความจากระบบ ใช้เมื่อต้องการตรวจสอบปัญหา</small></span><ChevronDown size={19} /></summary>
+    <div className="space-y-4 px-5 pb-5 sm:px-7 sm:pb-7">
+      <div className="terminal-card"><div className="terminal-heading"><span>ข้อความจากระบบ</span><div className="flex items-center gap-3"><select aria-label="แหล่งที่มาของข้อความ" className="terminal-select" value={source} onChange={event => setSource(event.target.value)}>{(job.log_sources || ['console']).map(item => <option key={item} value={item}>{item}</option>)}</select><label className="flex items-center gap-2"><input type="checkbox" checked={follow} onChange={event => setFollow(event.target.checked)} />เลื่อนตามอัตโนมัติ</label></div></div><ErrorNotice message={logError} /><pre ref={terminal} aria-label="รายละเอียดการทำงาน" className="terminal-output">{logs || 'ยังไม่มีข้อความจากระบบ…'}</pre></div>
+      {job.script === 'experiment_ocr' && <p className="field-hint">เลือก trial:&lt;ชื่อ&gt; ในช่องด้านบนเพื่อดูข้อความของแต่ละชุดค่า</p>}
+      <div className="command-preview"><p className="field-label">คำสั่งที่ใช้ (สำหรับผู้ดูแลระบบ)</p><pre>{job.command}</pre><p className="field-hint mt-2">รหัสงาน {job.id.slice(0, 8)} · รหัสผลลัพธ์จากโปรแกรม (exit code): {job.returncode ?? '—'}</p></div>
+    </div>
+  </details>
+  {!active && !job.result_ids?.length && (job.script === 'evaluate_ocr' || job.script === 'experiment_ocr') && job.status === 'completed' && <Empty title="งานนี้ไม่มีรายงานผล">การตรวจแผนจะแสดงแผนไว้ใน “รายละเอียดการทำงาน” โดยไม่สร้างรายงาน</Empty>}
   </div>;
 }
