@@ -13,21 +13,49 @@ from .schemas import JobRequest
 
 router = APIRouter(prefix="/api")
 
+DEPENDENCY_PROBE = (
+    "import importlib.util,json;"
+    "print(json.dumps({n:bool(importlib.util.find_spec(n)) "
+    "for n in ('paddleocr','PyQt5','cv2')}))"
+)
+
 
 @router.get("/health")
 async def health(request: Request):
     settings = request.app.state.settings
-    code = "import importlib.util,json;print(json.dumps({n:bool(importlib.util.find_spec(n)) for n in ('paddleocr','PyQt5','cv2')}))"
+
+    def inspect():
+        return subprocess.run(
+            [settings.python, "-c", DEPENDENCY_PROBE],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+
     try:
-        def inspect():
-            return subprocess.run([settings.python, "-c", code], capture_output=True, text=True, timeout=5)
         result = await asyncio.to_thread(inspect)
-        dependencies = json.loads(result.stdout) if result.returncode == 0 else {}
-        error = result.stderr.strip() if result.returncode else None
+
+        if result.returncode == 0:
+            dependencies = json.loads(result.stdout)
+        else:
+            dependencies = {}
+
+        if result.returncode:
+            error = result.stderr.strip()
+        else:
+            error = None
     except (OSError, ValueError, subprocess.TimeoutExpired) as exc:
-        dependencies, error = {}, str(exc)
-    return {"status": "ok", "python": settings.python, "root": str(settings.root),
-            "dependencies": dependencies, "error": error, "local_only": True}
+        dependencies = {}
+        error = str(exc)
+
+    return {
+        "status": "ok",
+        "python": settings.python,
+        "root": str(settings.root),
+        "dependencies": dependencies,
+        "error": error,
+        "local_only": True,
+    }
 
 
 @router.get("/scripts")
@@ -52,7 +80,11 @@ def jobs(request: Request):
 
 @router.post("/jobs/preview")
 def preview(payload: JobRequest, request: Request):
-    return build_command(request.app.state.settings, payload, "preview")
+    return build_command(
+        request.app.state.settings,
+        payload,
+        "preview",
+    )
 
 
 @router.post("/jobs", status_code=201)
@@ -66,7 +98,12 @@ def job(job_id: str, request: Request):
 
 
 @router.get("/jobs/{job_id}/logs")
-def logs(job_id: str, request: Request, source: str = "console", offset: int = Query(0, ge=0)):
+def logs(
+    job_id: str,
+    request: Request,
+    source: str = "console",
+    offset: int = Query(0, ge=0),
+):
     return request.app.state.jobs.logs(job_id, source, offset)
 
 
@@ -76,11 +113,25 @@ async def cancel(job_id: str, request: Request):
 
 
 @router.get("/response-logs")
-def response_logs(request: Request, limit: int = Query(200, ge=1, le=1000), errors_only: bool = False,
-                  method: str = "", q: str = ""):
+def response_logs(
+    request: Request,
+    limit: int = Query(200, ge=1, le=1000),
+    errors_only: bool = False,
+    method: str = "",
+    q: str = "",
+):
     settings = request.app.state.settings
-    return {"folder": settings.relative(settings.logs_dir),
-            "entries": request.app.state.response_log.entries(limit, errors_only, method, q)}
+    entries = request.app.state.response_log.entries(
+        limit,
+        errors_only,
+        method,
+        q,
+    )
+
+    return {
+        "folder": settings.relative(settings.logs_dir),
+        "entries": entries,
+    }
 
 
 @router.get("/results")
@@ -96,5 +147,16 @@ def result(result_id: str, request: Request):
 @router.get("/artifacts")
 def artifact(request: Request, path: str, download: bool = False):
     file = Results(request.app.state.settings).artifact(path)
-    return FileResponse(file, filename=file.name if download else None,
-                        content_disposition_type="attachment" if download else "inline")
+
+    if download:
+        filename = file.name
+        disposition = "attachment"
+    else:
+        filename = None
+        disposition = "inline"
+
+    return FileResponse(
+        file,
+        filename=filename,
+        content_disposition_type=disposition,
+    )

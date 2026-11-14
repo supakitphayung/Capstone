@@ -16,9 +16,20 @@ class Settings:
 
     def __post_init__(self):
         self.root = self.root.resolve()
+
         # Preserve the venv executable symlink: resolving it loses venv context.
         candidate = self.root / ".venv/bin/python"
-        self.python = self.python or os.environ.get("OCR_PYTHON") or str(candidate if candidate.is_file() else sys.executable)
+
+        if candidate.is_file():
+            default_python = str(candidate)
+        else:
+            default_python = sys.executable
+
+        self.python = (
+            self.python
+            or os.environ.get("OCR_PYTHON")
+            or default_python
+        )
 
     @property
     def jobs_dir(self):
@@ -34,10 +45,13 @@ class Settings:
 
     def within(self, relative: str, folders: tuple[str, ...], exists=False):
         path = (self.root / relative).resolve()
+
         if not any(path.is_relative_to(self.root / folder) for folder in folders):
             raise ValueError(f"เส้นทางต้องอยู่ภายใน {', '.join(folders)}")
+
         if exists and not path.exists():
             raise ValueError(f"ไม่พบไฟล์หรือโฟลเดอร์: {relative}")
+
         return path
 
     def relative(self, path: Path):

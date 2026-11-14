@@ -1,0 +1,41 @@
+ความเข้าใจในปัญหา (Problem Understanding)
+ทางบริษัทต้องการแพลตฟอร์ม AI Vision Inspection และ Intelligent Automation สำหรับงานอุตสาหกรรม เพื่อวิเคราะห์ ตรวจสอบ และคัดแยกจากภาพและวิดีโอแบบอัตโนมัติ ครอบคลุมการตรวจสอบสินค้า การตรวจจับตำหนิ การอ่าน Barcode/OCR การติดตามวัตถุ และการตรวจสอบความปลอดภัย โดยสามารถ deploy บนฮาร์ดแวร์ Edge AI และเชื่อมต่อกับ PLC, Robotics และ IoT devices ภายในโรงงานได้ และความสนใจรองคือการนำ vision stack เดียวกันไปประยุกต์ใช้กับงาน Smart Healthcare monitoring (การติดตามความปลอดภัย การวิเคราะห์ภาพเบื้องต้นในสถานพยาบาล) โดยระบุชัดเจนว่าเป็นเพียงเครื่องมือช่วยวิเคราะห์ ไม่ใช่อุปกรณ์วินิจฉัยทางการแพทย์
+คุณค่าที่ได้คือการลดข้อผิดพลาดจากการตรวจสอบโดยมนุษย์ เพิ่ม throughput ของกระบวนการผลิต และได้แพลตฟอร์มที่นำกลับมาใช้ซ้ำได้ ซึ่งเจ้าของโจทย์สามารถต่อยอดเชิงพาณิชย์สู่งานด้าน Smart Factory และ Industrial AI ได้ในอนาคต
+สมมติฐาน (Assumptions)
+ในส่วนที่โจทย์ไม่ได้ระบุรายละเอียด เราตั้งสมมติฐานดังต่อไปนี้ และระบุไว้อย่างชัดเจนเพื่อให้ทางบริษัทแก้ไขเราได้ตั้งแต่ต้น
+โจทย์มีขอบเขตกว้าง ดังนั้น v1 จะโฟกัสที่ 2 use case นำร่อง คือ 1. การตรวจจับตำหนิบนสายการผลิตเดียว และ 2. การอ่าน Barcode/OCR — โดยเลือกร่วมกับเจ้าของโจทย์ในสัปดาห์แรก ส่วนงานอื่น (การติดตามวัตถุ ความปลอดภัย healthcare) จะทำเป็น feasibility study และการเตรียม architecture รองรับ ไม่ใช่การพัฒนาเต็มรูปแบบ
+ทางบริษัทจัดเตรียมภาพตัวอย่างหรือการเข้าถึงสายการผลิตให้ หากไม่มี ทีมเราจะเริ่มต้นด้วย public dataset (~10k ภาพ) ร่วมกับ synthetic augmentation แล้วค่อย fine-tune โมเดลด้วยข้อมูลจริงภายหลัง
+อุปกรณ์ Edge เป้าหมายคือระดับ Raspberry Pi โดย real-time หมายถึงการตัดสินใจ ≤ 500 ms ต่อเฟรมที่หน้างาน ไม่ใช่การตรวจสอบความเร็วสูง (>30 fps)
+การเชื่อมต่อ PLC ใช้โปรโตคอลอุตสาหกรรมมาตรฐาน (Modbus TCP หรือ OPC UA) กับ test PLC หรือ simulator เราไม่แก้ไข logic ของ PLC ที่ใช้งานจริงใน production
+เกณฑ์ความสำเร็จ: recall ของการตรวจจับตำหนิ ≥ 90% บน pilot dataset, การ demo สดบนอุปกรณ์ edge และการสั่งงานคัดออก (reject) ผ่าน PLC ที่ทำงานได้จริง
+แนวทาง / โซลูชันที่นำเสนอ (Proposed Approach / Solution)
+เราจะพัฒนา pipeline แบบ modular เพื่อให้แต่ละงาน (inspection, OCR, tracking) เป็นโมเดลแบบ plug-in บนโครงสร้างพื้นฐานร่วมกัน
+Vision models: การตรวจจับวัตถุ/ตำหนิด้วยโมเดลตระกูล YOLO ที่ fine-tune บน pilot dataset และใช้ไลบรารี OCR/Barcode มาตรฐาน (เช่น PaddleOCR, ZXing) สำหรับการอ่านโค้ด
+Edge deployment: export โมเดลและรันบนอุปกรณ์ edge โดยมี flow คือ camera capture → on-device inference → event bus (MQTT)
+Automation integration: gateway service ที่แปลงผล inference เป็นสัญญาณ PLC (Modbus TCP/OPC UA) เพื่อสั่งงานคัดออก/คัดแยก พร้อม hook สำหรับ Robotics และ IoT devices
+Dashboard & monitoring: web dashboard แสดงผลแบบ live สถิติตำหนิ สถานะอุปกรณ์ และการแจ้งเตือน
+Data & training pipeline: การเก็บภาพจากสายการผลิต, labeling workflow, dataset แบบมี versioning และ retraining pipeline เพื่อให้เจ้าของโจทย์ปรับปรุงโมเดลต่อได้หลัง handover
+Healthcare feasibility: การศึกษาระยะสั้นในการนำ stack เดียวกันไปใช้กับการ monitoring หอผู้ป่วย/พื้นที่ พร้อมรายงานประเมินด้านความแม่นยำ ความเป็นส่วนตัว และขอบเขตด้านกฎระเบียบ (เป็นเครื่องมือช่วยเท่านั้น)
+ขอบเขตงานและ Deliverables (Scope & Deliverables)
+ในขอบเขต (In Scope)
+ระบบ AI vision inspection แบบ end-to-end สำหรับ 2 use case นำร่อง (การตรวจจับตำหนิ, Barcode/OCR)
+การ deploy Edge AI บนอุปกรณ์อ้างอิง 1 เครื่อง
+การเชื่อมต่อ PLC ผ่านโปรโตคอลอุตสาหกรรม 1 โปรโตคอล พร้อมสาธิตการสั่งงานอัตโนมัติ
+Web dashboard และระบบ monitoring
+ระบบเก็บข้อมูล labeling และ AI training/retraining pipeline
+Feasibility study ด้าน Smart Healthcare และการเตรียม architecture รองรับ
+นอกขอบเขต (Out of Scope)
+การ deploy ระดับ production ที่ผ่านการรับรองในหลายสายการผลิตหรือหลายโรงงาน
+การตรวจสอบความเร็วสูง (>30 fps) และการ sync กล้องหลายตัว
+การเขียนโปรแกรมแขนกลเต็มรูปแบบ — เราเชื่อมต่อสัญญาณ ไม่ใช่การทำ robot motion planning
+ความสามารถในการวินิจฉัยทางการแพทย์หรือการตรวจสอบทางคลินิกทุกรูปแบบ
+Deliverables ที่คาดหวัง
+ต้นแบบระบบ inspection ที่ deploy บน edge และทำงานได้จริง พร้อม demo สด (camera → inference → PLC action)
+โมเดลที่ผ่านการ train พร้อมรายงานประเมินผล (precision/recall บน pilot dataset)
+Dashboard, data pipeline และเครื่องมือ retraining
+เอกสาร architecture, deployment guide และรายงาน feasibility ด้าน healthcare
+ทำไมต้องทีมนี้ (Why This Team)
+
+ทีมเราเหมาะสมอย่างยิ่งกับโจทย์นี้ เพราะเรามีประสบการณ์ตรงด้าน embedded systems และ IoT โดยเคยทำโปรเจกต์ IoT แบบครบวงจร ตั้งแต่การออกแบบระบบไปจนถึงการ implement วงจร นอกจากนี้เรายังมีประสบการณ์จริงด้าน computer vision ทั้งการ train โมเดลและการนำไป deploy บนฮาร์ดแวร์ โดยเฉพาะโมเดลตระกูล YOLO อีกทั้งเคยพัฒนา web dashboard เชื่อมต่อกับบอร์ด โดยส่งข้อมูลจากบอร์ดไปยัง dashboard เพื่อทำ logging และ monitoring ทีมเรายังมีประสบการณ์ด้าน full-stack และเคยทำงานจริงในระดับ production (เว็บไซต์ให้มหาวิทยาลัย) และมีประสบการณ์การทำงานด้าน IoT ครอบคลุมตั้งแต่การออกแบบ system ไปจนถึงการ implement วงจร
+ด้านความสนใจ ทีมเรามีความสนใจด้าน IoT เป็นพิเศษ และต้องการสร้างระบบเป็น full pipeline ที่ทำงานแบบอัตโนมัติตั้งแต่ต้นจนจบ
+
